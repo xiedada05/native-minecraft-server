@@ -20,7 +20,7 @@ Check out [this blog post][blog-post] for more information.
 
 ## Getting Started
 
-1. Download GraalVM [Community][ce] or [Enterprise][ee] *(GraalVM 22.2.0 or later is required)*.  
+1. Download GraalVM [Community][ce] or [Enterprise][ee] for JDK 25 *(a GraalVM distribution with Native Image is required; `native-image` must be on your `$PATH` or reachable via `$GRAALVM_HOME`)*.  
 *Optional: make sure [upx] is on your `$PATH` to enable compression.*
 2. Download or check out this repository and run the [`build.sh`](build.sh).
 3. Launch the native Minecraft server with `./native-minecraft-server`.  
@@ -31,15 +31,18 @@ This project only contains the `build.sh` script and [reachability metadata][met
 The `build.sh` script first downloads Minecraft's `server.jar` and extracts jars and other resources from it.
 Afterward, it invokes GraalVM Native Image with an appropriate configuration to generate a native version of the Minecraft server.
 Finally, and only if [upx] is on the `$PATH`, the script will compress the native executable.
+The build produces the executable plus a few bundled JDK native libraries (`lib*.so`) which must stay next to it when moving the server to another machine.
+
+The currently supported Minecraft version is `26.3`.
+To build a different version, pass its name via `MINECRAFT_VERSION`, e.g. `MINECRAFT_VERSION=1.18.2 ./build.sh` — older versions require the reachability metadata of the corresponding commit in this repository's Git history (recent GraalVM releases removed some of the options those versions need).
 
 ## Limitations and Known Issues
 
-- The configuration currently only supports Minecraft `1.18.2`.
+- The configuration currently only supports Minecraft `26.3`.
 - The server GUI is not yet supported.
 - Mods are currently not supported.
 - There is no build script for Windows yet, but the [WSL] should work.
-- The native executable sometimes fails on startup. Restarting it a few times usually helps.  
-*Error: `com.mojang.datafixers.types.templates.List$ListType cannot be cast to java.lang.Comparable`*. 
+
 
 ## Contributions
 Please [report any issues here on GitHub][issues] and open pull requests if you'd like to contribute to the project.

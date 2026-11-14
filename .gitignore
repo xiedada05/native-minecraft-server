@@ -4,6 +4,7 @@ debug
 eula.txt
 logs
 native-minecraft-server
+/*.so
 server.properties
 sources
 world
