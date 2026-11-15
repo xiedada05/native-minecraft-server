@@ -4,7 +4,10 @@ debug
 eula.txt
 logs
 native-minecraft-server
+native-minecraft-server.bin
+/.graalvm-home
 /*.so
 server.properties
 sources
 world
+/lib

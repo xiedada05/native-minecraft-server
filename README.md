@@ -20,8 +20,8 @@ Check out [this blog post][blog-post] for more information.
 
 ## Getting Started
 
-1. Download GraalVM [Community][ce] or [Enterprise][ee] for JDK 25 *(a GraalVM distribution with Native Image is required; `native-image` must be on your `$PATH` or reachable via `$GRAALVM_HOME`)*.  
-*Optional: make sure [upx] is on your `$PATH` to enable compression.*
+1. Download GraalVM [Community][ce] or [Enterprise][ee] for JDK 25 *(a GraalVM distribution with Native Image is required; `native-image` must be on your `$PATH` or reachable via `$GRAALVM_HOME` — the resolved location is remembered in `.graalvm-home` for later runs)*.  
+*Optional: pass `UPX=1` to compress the executable with [upx] after building.*
 2. Download or check out this repository and run the [`build.sh`](build.sh).
 3. Launch the native Minecraft server with `./native-minecraft-server`.  
 *The first time you run the server, you will have to follow the regular procedure of accepting Minecraft's EULA.*
@@ -36,12 +36,31 @@ The build produces the executable plus a few bundled JDK native libraries (`lib*
 The currently supported Minecraft version is `26.3`.
 To build a different version, pass its name via `MINECRAFT_VERSION`, e.g. `MINECRAFT_VERSION=1.18.2 ./build.sh` — older versions require the reachability metadata of the corresponding commit in this repository's Git history (recent GraalVM releases removed some of the options those versions need).
 
+### Profile-Guided Optimizations (optional, Oracle GraalVM only)
+
+PGO trains the optimizer with a real workload; on Minecraft 26.3 it raised peak tick throughput by ~68% (41→69 TPS in a 100-bot `tick sprint 2000`), cut median tick latency by ~35%, and shrank the executable by ~40%.
+
+One command does the whole pipeline (instrumented build → automated training run in a throwaway world with a hot `tick sprint`, console traffic and, if available, bot-client waves → final PGO build):
+
+```bash
+scripts/build-with-pgo.sh [path-to-botmark-binary]   # or export BOTMARK_BIN
+```
+
+The individual steps, if you want to control them:
+
+1. `PGO=instrument ./build.sh` — build an instrumented binary into `build/`.
+2. `scripts/train-pgo.sh [path-to-botmark-binary]` — run the training workload and collect the profile into `build/pgo/` (boot with a fresh world, `tick sprint 2000`, console commands, optional bot waves; profiles accumulate across runs).
+3. `PGO=apply ./build.sh` — rebuild with the collected profiles.
+
+Note: `--enable-monitoring=jfr` is dropped automatically for instrumented builds because JFR's JVMTI agent crashes the instrumented image build in Oracle GraalVM 25.
+
 ## Limitations and Known Issues
 
 - The configuration currently only supports Minecraft `26.3`.
-- The server GUI is not yet supported.
 - Mods are currently not supported.
 - There is no build script for Windows yet, but the [WSL] should work.
+- The server GUI works on Linux through X11/XWayland (exactly like a regular JVM on Wayland desktops). The build ships a launcher that sets `java.home` (overridable at runtime with `-Djava.home=...`) and generates `lib/fontconfig.properties` from the system fonts, because the JDK's native fontconfig integration is unavailable inside a native image.
+
 
 
 ## Contributions

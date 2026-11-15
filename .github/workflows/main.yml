@@ -4,9 +4,20 @@ jobs:
   build:
     name: Build on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
+    continue-on-error: ${{ matrix.experimental }}
     strategy:
+      fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        include:
+          - os: ubuntu-latest
+            experimental: false
+            # ubuntu-latest runners have 16 GB of RAM
+            native-image-xmx: 10g
+          - os: macos-latest
+            # macos-latest runners only have 7 GB of RAM; the 26.3 analysis
+            # may exceed that, so treat macOS as best-effort for now.
+            experimental: true
+            native-image-xmx: 5g
     steps:
       - uses: actions/checkout@v4
       - uses: graalvm/setup-graalvm@v1
@@ -14,12 +25,14 @@ jobs:
           java-version: '25'
           distribution: 'graalvm'
           github-token: ${{ secrets.GITHUB_TOKEN }}
-      - name: Check build.sh
+      - name: Check shell scripts
         shell: bash
-        run: shellcheck build.sh
+        run: shellcheck build.sh scripts/*.sh
         if: ${{ matrix.os == 'ubuntu-latest' }}
       - name: Build and run native Minecraft server
         shell: bash
+        env:
+          NATIVE_IMAGE_XMX: ${{ matrix.native-image-xmx }}
         run: |
           ./build.sh
           ./native-minecraft-server --help
