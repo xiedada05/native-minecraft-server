@@ -1,23 +1,30 @@
 name: Build Native Minecraft Server
 on: [ push, pull_request ]
+
 jobs:
   build:
-    name: Build on ${{ matrix.os }}
+    name: ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
-    continue-on-error: ${{ matrix.experimental }}
+    continue-on-error: ${{ matrix.experimental || false }}
+    timeout-minutes: 120
     strategy:
       fail-fast: false
       matrix:
         include:
-          - os: ubuntu-latest
-            experimental: false
-            # ubuntu-latest runners have 16 GB of RAM
-            native-image-xmx: 10g
-          - os: macos-latest
-            # macos-latest runners only have 7 GB of RAM; the 26.3 analysis
-            # may exceed that, so treat macOS as best-effort for now.
-            experimental: true
-            native-image-xmx: 5g
+          # Linux x64: all four variants
+          - { name: linux-x64-plain,      os: ubuntu-latest,    variant: plain,   native-image-xmx: 10g, experimental: false }
+          - { name: linux-x64-upx,        os: ubuntu-latest,    variant: upx,     native-image-xmx: 10g, experimental: false }
+          - { name: linux-x64-pgo,        os: ubuntu-latest,    variant: pgo,     native-image-xmx: 10g, experimental: false }
+          - { name: linux-x64-upx-pgo,    os: ubuntu-latest,    variant: upx-pgo, native-image-xmx: 10g, experimental: false }
+          # Linux arm64: all four variants
+          - { name: linux-arm64-plain,    os: ubuntu-24.04-arm, variant: plain,   native-image-xmx: 10g, experimental: false }
+          - { name: linux-arm64-upx,      os: ubuntu-24.04-arm, variant: upx,     native-image-xmx: 10g, experimental: false }
+          - { name: linux-arm64-pgo,      os: ubuntu-24.04-arm, variant: pgo,     native-image-xmx: 10g, experimental: false }
+          - { name: linux-arm64-upx-pgo,  os: ubuntu-24.04-arm, variant: upx-pgo, native-image-xmx: 10g, experimental: false }
+          # macOS arm64: plain and upx only — the 7 GB runners cannot fit the
+          # instrumented 26.3 analysis needed for a PGO build.
+          - { name: macos-arm64-plain,    os: macos-latest,     variant: plain,   native-image-xmx: 5g,  experimental: true }
+          - { name: macos-arm64-upx,      os: macos-latest,     variant: upx,     native-image-xmx: 5g,  experimental: true }
     steps:
       - uses: actions/checkout@v4
       - uses: graalvm/setup-graalvm@v1
@@ -26,13 +33,42 @@ jobs:
           distribution: 'graalvm'
           github-token: ${{ secrets.GITHUB_TOKEN }}
       - name: Check shell scripts
+        if: matrix.variant == 'plain' && runner.os == 'Linux'
         shell: bash
         run: shellcheck build.sh scripts/*.sh
-        if: ${{ matrix.os == 'ubuntu-latest' }}
-      - name: Build and run native Minecraft server
+      - name: Install upx
+        if: contains(matrix.variant, 'upx')
+        shell: bash
+        run: |
+          if [ "$RUNNER_OS" = "Linux" ]; then
+            sudo apt-get update -q
+            sudo apt-get install -y --no-install-recommends upx
+          else
+            brew install upx
+          fi
+      - name: Build
         shell: bash
         env:
           NATIVE_IMAGE_XMX: ${{ matrix.native-image-xmx }}
+          UPX: ${{ contains(matrix.variant, 'upx') && '1' || '0' }}
+          BOTMARK_BIN: ''
         run: |
-          ./build.sh
-          ./native-minecraft-server --help
+          if [ "${{ contains(matrix.variant, 'pgo') }}" = "true" ]; then
+            ./scripts/build-with-pgo.sh
+          else
+            ./build.sh
+          fi
+      - name: Smoke test
+        shell: bash
+        run: ./native-minecraft-server --help
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-minecraft-server-${{ matrix.name }}
+          if-no-files-found: error
+          path: |
+            native-minecraft-server
+            native-minecraft-server.bin
+            lib*.so
+            lib*.dylib
+            lib/fontconfig.properties
