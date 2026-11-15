@@ -121,11 +121,18 @@ elif [[ "${PGO:-}" == "apply" ]]; then
 fi
 readonly PGO_FLAGS MONITORING
 
+# Native-image G1 GC is only supported on Linux AMD64/AArch64; macOS falls
+# back to the default (Serial) collector.
+GC_FLAGS=(--gc=G1)
+if [[ "$(uname)" != "Linux" ]]; then
+    GC_FLAGS=()
+fi
+
 # Bake java.home so AWT/Swing (the server GUI) can locate font configuration
 # at runtime; native images do not set it themselves. Overridable at runtime
 # with -Djava.home=... .
 "${NI_EXEC}" \
-    --gc=G1 \
+    ${GC_FLAGS[@]+"${GC_FLAGS[@]}"} \
     ${PGO_FLAGS[@]+"${PGO_FLAGS[@]}"} \
     "-Djava.home=${GRAALVM_DETECTED_HOME}" \
     -H:ConfigurationFileDirectories="${CONFIG_DIR}/" \
